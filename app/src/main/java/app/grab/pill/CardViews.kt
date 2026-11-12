@@ -14,9 +14,11 @@ import android.widget.TextView
 object CardViews {
     val COLOR = mapOf(
         "OTP" to 0xFF5856D6.toInt(), "RIDE" to 0xFFFF9500.toInt(), "ORDER" to 0xFFFF3B30.toInt(),
-        "METRO" to 0xFF007AFF.toInt(), "MOVIE" to 0xFFAF52DE.toInt(), "TICKET" to 0xFF34C759.toInt()
+        "METRO" to 0xFF007AFF.toInt(), "MOVIE" to 0xFFAF52DE.toInt(), "TICKET" to 0xFF34C759.toInt(),
+        "ASK" to 0xFF30B0C7.toInt(), "CALL" to 0xFFFF2D55.toInt(), "MEET" to 0xFF5AC8FA.toInt(), "PAY" to 0xFF1C8C4E.toInt()
     )
-    val ICON = mapOf("OTP" to "🔢", "RIDE" to "🛵", "ORDER" to "🛍", "METRO" to "🚇", "MOVIE" to "🎬", "TICKET" to "🎟")
+    val ICON = mapOf("OTP" to "🔢", "RIDE" to "🛵", "ORDER" to "🛍", "METRO" to "🚇", "MOVIE" to "🎬", "TICKET" to "🎟",
+        "ASK" to "📄", "CALL" to "🛡", "MEET" to "📅", "PAY" to "₹")
 
     fun dp(c: Context, v: Int) = (v * c.resources.displayMetrics.density).toInt()
 

@@ -6,6 +6,17 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
+    <!-- v0.3 assistant -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- only used by the optional AI, when you turn it on -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <!-- Lets us see which UPI / ride apps are installed (for hand-off) -->
     <queries>
@@ -19,6 +30,20 @@
         <package android:name="in.swiggy.android" />
         <package android:name="com.application.zomato" />
         <package android:name="com.bt.bms" />
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+        <package android:name="com.google.android.gm" />
+        <package android:name="com.microsoft.office.outlook" />
+        <package android:name="org.telegram.messenger" />
+        <!-- pick your metro app; share documents straight into the app that asked -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="*/*" />
+        </intent>
     </queries>
 
     <application
@@ -28,7 +53,7 @@
         android:theme="@style/Theme.Grab">
 
         <!-- Hub: tickets, codes, live status in one place -->
-        <activity android:name=".HubActivity" android:exported="true">
+        <activity android:name=".HubActivity" android:exported="true" android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -36,6 +61,7 @@
         </activity>
         <activity android:name=".SetupActivity" android:exported="false" />
         <activity android:name=".CardActivity" android:exported="false" android:excludeFromRecents="true" />
+        <activity android:name=".DocsActivity" android:exported="false" />
 
         <!-- The panel that opens when you tap an idle pill -->
         <activity
@@ -50,7 +76,9 @@
             android:name=".ScanPayActivity"
             android:exported="false"
             android:excludeFromRecents="true"
-            android:theme="@style/Theme.Grab.Translucent" />
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize" />
+        <receiver android:name=".UpiChosenReceiver" android:exported="false" />
 
         <!-- Share a metro ticket screenshot, or any text, into Grab -->
         <activity
@@ -93,6 +121,24 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!-- Caller ID & spam role: Android asks Grab about calls from numbers not in your contacts -->
+        <service
+            android:name=".SpamScreener"
+            android:exported="true"
+            android:permission="android.permission.BIND_SCREENING_SERVICE">
+            <intent-filter>
+                <action android:name="android.telecom.CallScreeningService" />
+            </intent-filter>
+        </service>
+
+        <receiver android:name=".GeofenceReceiver" android:exported="false" />
+        <receiver android:name=".BootReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"

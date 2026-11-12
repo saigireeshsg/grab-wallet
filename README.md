@@ -1,61 +1,100 @@
-# Grab Wallet v0.2 (Android): tickets, OTPs and live status in one place
+# Grab v0.3 (Android): a context assistant in your thumb zone
 
-**What it does**
-- **Hub** (the app's home screen): **Now** (the single most urgent thing) · **Tickets** (metro, movie, other) · **Live status** (rides, orders) · **Codes** (OTPs, deleted after 15 min).
-- **Pill** (floats at the bottom of every screen): shows the one card that matters right now. Tap = show it at full brightness. Swipe down = hide that card from the pill. Drag = move the pill.
-- Everything is read and stored **on the phone**. Nothing is uploaded.
+Grab watches what is happening on your phone (notifications, where you are, the time, incoming calls)
+and puts the one thing you need **at the bottom of the screen**, so you stop jumping between apps and
+reaching for the top of the screen.
 
-## Where each card comes from
-
-| Card | How it gets in | Expires |
+| Moment | Before | With Grab |
 |---|---|---|
-| OTP | notification from any app (bank, login, delivery) | 15 min |
-| Ride (Rapido, Uber, Ola, Namma Yatri) | that app's notifications · newest status replaces older | 2 h |
-| Order (Swiggy, Zomato, Zepto, Blinkit, Amazon, Flipkart, BigBasket) | that app's notifications · one live card per app | 6 h |
-| Movie ticket | BookMyShow notification, **or** screenshot/PDF shared into Grab | 4 h after showtime |
-| Metro ticket | screenshot of the metro QR shared into Grab, or "Add a ticket" | end of day |
+| Metro gate | unlock → metro app → ticket → tap QR → brightness up (4–5 steps) | walk into the station → QR pops up at full brightness (0 taps) |
+| Pay a shop | open UPI app → scan → type amount → PIN (4 screens) | hold the pill → camera + your usual amount on one screen → PIN in your UPI app |
+| Rapido OTP | pull down notifications from the top → read → remember | pop-up at the bottom: "2 min away · 4 4 7 1" + Copy |
+| Spam call | phone rings, you look, you decline | ringtone muted + pop-up: **Decline · Always block · It's OK** |
+| "Send me your PAN" | open WhatsApp → attach → Files → find PAN → send | pop-up: **Send PAN card** → WhatsApp opens with it attached |
+| Meeting in 2 min | open calendar → find event → find link | pop-up: **Join** |
 
-For screenshots and PDFs, ML Kit runs **on the phone**: it reads the QR (Grab re-draws a sharp copy) and the text (movie name, show time, seat, audi, stations).
+Everything is processed **on the phone**. The only exception is the optional AI (off by default, see below).
 
-## How the pill decides what to show (`CardStore.score`)
-OTP under 10 min (100) > live ride (92) > movie starting within 90 min (88) > order arriving (85) > metro during commute hours (75) > everything else. It re-ranks every minute, so a movie ticket rises by itself as the show gets close.
+## The pieces
 
-## Build
-1. Unzip → Android Studio → Open `grab-wallet` → wait for sync (first time 10–15 min).
-2. Plug in the phone (USB debugging on) → ▶ Run.
-   No laptop? Push the folder to GitHub → Actions → "Build APK" → download the artifact.
-3. **Android 13+:** Settings → Apps → Grab → ⋮ → *Allow restricted settings* before notification access.
-4. Open Grab → **Finish setup** → steps 1–4 → **Start the pill**.
+**Pill** (bottom of every screen)
+- tap: the most urgent card (OTP, ride, ticket, a request) · **hold: Scan & pay** · **swipe up: quick panel** · swipe down: hide that card · drag sideways: move
 
-## Test in 5 minutes
-1. Setup → **Add a fake movie (in 1 hour)**: the pill turns purple ("Kaantha · tap to show"); tap it for a crisp QR at full brightness.
-2. Setup → **Add a fake OTP**: the pill shows 4 8 2 7 3 1; it disappears by itself after 15 min.
-3. Book a real Rapido → the pill turns orange with the OTP → it updates as the status changes.
-4. In your metro app, screenshot the QR → Share → **Save to Grab** → it appears under Tickets and in the pill during commute hours.
-5. Share a BookMyShow ticket PDF to Grab → the movie name, time and seats are read off the ticket.
+**Pop-ups** slide up above the pill when the assistant thinks something needs you, then go away by themselves (or swipe down).
+
+**Home screen**: two tabs, **Now** (ranked for this moment) and **Wallet** (tickets, documents, codes), with a bottom bar: **Scan & pay · Metro · Docs**.
+
+## How it understands context
+
+| Signal | What Grab does with it |
+|---|---|
+| Notifications | OTPs, ride and order status, tickets (`Parser.kt`); "send me your PAN / resume…" and "can you confirm?" in WhatsApp, Gmail, Outlook, Telegram, Slack, SMS (`Asks` in `Docs.kt`) |
+| Where you are | geofences around places it knows (`Places.kt`). **Metro stations are learned by themselves:** open your metro ticket at a station once, and next time the QR pops up as you walk in. Spots near Home/Work are never learned as stations |
+| Habits | every time you open a ticket, pay or send a document it counts (weekday/weekend × hour, slowly fading). At that hour, those things rank higher in the pill, the panel and the hub (`Habits.kt`). The hub shows what it has learned ("Metro ticket: usually around 8 AM on weekdays") |
+| Incoming calls | as the phone's Caller-ID & spam app, Grab sees calls from numbers **not in your contacts** (`SpamScreener.kt`): your blocked numbers are rejected; 140-series telemarketing, spoofed caller ID, hidden and unexpected international numbers are silenced with a Decline pop-up |
+| Calendar | one-tap Join 3 minutes before a meeting with a Meet/Zoom/Teams link |
+| Clock | movie ticket pops up 25 minutes before the show; the pill re-ranks every minute |
+
+`Assistant.kt` is the one place that decides what deserves a pop-up; `CardStore.score` decides what the pill shows.
+
+## Payments: what is and isn't possible
+Grab puts the camera and the amount on **one screen** and hands the payment to your UPI app with payee and amount filled
+(the original QR is passed through untouched, so merchant QRs keep working). The UPI app you pick the first time is remembered.
+**Grab can't approve the payment itself:** under NPCI rules only your bank's UPI app can authorise it, with your UPI PIN.
+To use your **fingerprint** instead of the PIN, turn on biometric UPI (or UPI Lite for small payments) in your UPI app, if it offers it.
+
+## Documents
+Wallet → Documents (or the **Docs** button): add your PAN, Aadhaar, resume, payslips, etc. once. They're copied into app-private
+storage (not the gallery). When someone asks for one, the pop-up sends it straight into the app they asked in (WhatsApp, Gmail…):
+you pick the chat and press send. If it isn't in the vault yet, the pop-up says **Find it**: pick the file once and Grab sends it
+and keeps it for next time.
+
+## Optional AI (off by default)
+Setup → *Optional AI*. With your own Anthropic API key, messages the local rules can't decide ("can you mail me the signed copy?")
+are sent to Claude, one message at a time (sender name, app, text, with runs of 4+ digits masked), only when they look like a question or request.
+Claude answers whether it's a document request or needs a reply. OTPs, rides, tickets, calls and locations are never sent.
+The key is stored encrypted on the phone. The default model is `claude-opus-5-5` and can be changed in the same dialog.
+Note: the SDK for this adds ~55 MB to the APK.
+
+## Setup (once)
+1. Build: push to GitHub → Actions → "Build APK" → download `grab-pill-apk` (or open in Android Studio → ▶ Run).
+2. **Android 13+:** Settings → Apps → Grab → ⋮ → *Allow restricted settings* (needed before notification access).
+3. Open Grab → **Finish setup** → steps 1–7 → **Start the pill**.
+   - Step 4 (location): choose **Allow all the time**, or the station pop-up only works with Grab open.
+   - Step 5 (spam): pick Grab as *Caller ID & spam app*.
+4. Optional: Setup → pick your **metro app** (opened at the station when no ticket is saved).
+
+## Test in 5 minutes (Setup → Test)
+1. **Fake Rapido arriving** → pop-up at the bottom with the OTP and Copy.
+2. **Fake "send me your PAN"** → pop-up: *Find it* (first time) → pick a file → share sheet opens. Do it again: now it says *Send PAN card*.
+3. **Fake "arrived at metro"** → metro QR pops up at full brightness.
+4. **Fake spam call pop-up** → see the Decline / Always block / It's OK layout.
+5. Hold the pill → Scan & pay opens with the camera; point at any UPI QR.
 
 ## Your tuning job (most important)
-Real notification wording differs from app to app. For one week:
-1. In Android Studio's **Logcat**, add a temporary `Log.d("GRAB", "$pkg | $title | $text")` in `GrabNotificationListener`.
-2. Collect 20–30 real examples (Rapido, Swiggy, bank OTPs, BookMyShow, metro).
-3. Adjust the regexes and keyword lists in `Parser.kt` until every one becomes the right card.
+Real notification wording differs from app to app. For a week, collect real examples (Rapido, Swiggy, bank OTPs, WhatsApp requests)
+and add them to `app/src/test/java/app/grab/pill/RulesTest.kt`; adjust the regexes in `Parser.kt` and `Docs.kt` until every one passes.
+`gradle testDebugUnitTest` runs them (CI runs them on every push).
 
 ## Files
 ```
-Card.kt          Card model + CardStore (on-device file, expiry, ranking) + CardBus
-Parser.kt        notification/ticket text → Card (OTP, ride, order, movie, metro)
-Importer.kt      screenshot/PDF → ML Kit QR + text → Card
-GrabNotificationListener.kt   notifications → Parser → CardStore
-HubActivity.kt   the one place (Now · Tickets · Live status · Codes) + add from screenshots/PDF
-CardActivity.kt  show a card: full brightness, screen stays on, crisp QR, copy code, delete
-PillService.kt   floating pill (most urgent card, re-ranks every minute)
-PillActivity.kt  idle pill panel: top 3 cards + scan & pay + next meeting
-SetupActivity.kt permissions, battery tip, test cards, delete everything
-ScanPayActivity.kt, CalendarHelper.kt, Store.kt   from v0.1 (scan & pay, calendar, vendor memory)
+Assistant.kt     the decision maker: which moment deserves a pop-up, and its buttons (+ Live: exact "Open" targets)
+PillService.kt   the pill (gestures) + pop-up overlay at the bottom, ticks every minute
+Card.kt          Card model + CardStore (on-device file, expiry, context-aware ranking)
+Habits.kt        Ctx (where you are now) + Habits (what you use when)
+Places.kt        known places as geofences, self-learning metro stations, GeofenceReceiver
+Docs.kt          DocVault (your documents) + Asks (detect "send me your X" and send it)
+DocsActivity.kt  the vault screen; "Find it" flow
+SpamScreener.kt  call screening + SpamRules
+ScanPayActivity.kt  live camera + amount on one screen → your UPI app
+Brain.kt         optional Claude classifier for unclear messages (off by default)
+Parser.kt, Importer.kt, GrabNotificationListener.kt   notifications / screenshots / PDFs → cards
+HubActivity.kt   Now · Wallet tabs + thumb bar      PillActivity.kt  quick panel
+CardActivity.kt  show a card at full brightness     SetupActivity.kt permissions, places, assistant settings, tests
 ```
 
-## Next (v0.3)
-- Auto-import new screenshots that contain a ticket QR (opt-in, using the photo picker or the screenshot observer).
-- Movie: "leave by 6:38" from show time + travel time.
-- Metro: show the ticket when you reach the station (geofence).
+## Next (v0.4)
+- Auto-import new screenshots that contain a ticket QR.
+- "Leave by 6:38" for movies and meetings from travel time.
+- Learn which chat a document usually goes to.
 - Encrypted storage (Room + SQLCipher).

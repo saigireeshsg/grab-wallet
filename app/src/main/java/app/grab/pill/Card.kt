@@ -12,7 +12,7 @@ import java.util.Calendar
  */
 data class Card(
     val id: String,
-    val kind: String,          // OTP | RIDE | ORDER | METRO | MOVIE | TICKET
+    val kind: String,          // OTP | RIDE | ORDER | METRO | MOVIE | TICKET | ASK
     val title: String,
     val sub: String,
     val value: String = "",    // OTP digits, seat, fare…
@@ -22,16 +22,19 @@ data class Card(
     val src: String = "",      // app it came from
     val key: String = "",      // dedupe key: latest status per app replaces the previous one
     val ts: Long = System.currentTimeMillis(),
-    val exp: Long = 0          // auto-delete after this time
+    val exp: Long = 0,         // auto-delete after this time
+    val extra: String = ""     // small JSON for actions (ASK: app, sender, doc type, doc id)
 ) {
+    fun x(): JSONObject = try { JSONObject(extra) } catch (e: Exception) { JSONObject() }
+
     fun json(): JSONObject = JSONObject().apply {
         put("id", id); put("kind", kind); put("title", title); put("sub", sub); put("value", value)
-        put("qr", qr); put("img", img); put("when", whenMs); put("src", src); put("key", key); put("ts", ts); put("exp", exp)
+        put("qr", qr); put("img", img); put("when", whenMs); put("src", src); put("key", key); put("ts", ts); put("exp", exp); put("extra", extra)
     }
     companion object {
         fun from(o: JSONObject) = Card(
             o.optString("id"), o.optString("kind"), o.optString("title"), o.optString("sub"), o.optString("value"),
-            o.optString("qr"), o.optString("img"), o.optLong("when"), o.optString("src"), o.optString("key"), o.optLong("ts"), o.optLong("exp")
+            o.optString("qr"), o.optString("img"), o.optLong("when"), o.optString("src"), o.optString("key"), o.optLong("ts"), o.optLong("exp"), o.optString("extra")
         )
         fun newId() = "c" + System.currentTimeMillis().toString(36) + (1000..9999).random()
     }
@@ -70,9 +73,11 @@ object CardStore {
         if (card.key.isNotEmpty()) list.removeAll { it.key == card.key }
         // ignore exact duplicates arriving within 5 minutes
         if (list.any { it.kind == card.kind && it.value == card.value && it.title == card.title && card.ts - it.ts < 5 * MIN }) return
-        list.add(0, card.copy(exp = if (card.exp != 0L) card.exp else defaultExpiry(card)))
+        val saved = card.copy(exp = if (card.exp != 0L) card.exp else defaultExpiry(card))
+        list.add(0, saved)
         save(c, list)
         CardBus.emit()
+        Assistant.onNewCard(c, saved) // decide whether this deserves a pop-up in the thumb zone
     }
 
     @Synchronized
@@ -92,6 +97,7 @@ object CardStore {
             "ORDER" -> now + 6 * HOUR
             "MOVIE" -> if (card.whenMs > 0) card.whenMs + 4 * HOUR else now + 3 * 24 * HOUR
             "METRO" -> endOfDay(now)
+            "ASK" -> now + 24 * HOUR
             else -> now + 7 * 24 * HOUR
         }
     }
@@ -102,9 +108,12 @@ object CardStore {
 
     /**
      * What matters RIGHT NOW. Drives the pill and the top of the hub.
-     * Higher = more urgent.
+     * Higher = more urgent. Rules give the base; where you are (Ctx) and what you
+     * usually do at this hour (Habits) push it up.
      */
-    fun score(card: Card, now: Long = System.currentTimeMillis()): Int {
+    fun score(card: Card, now: Long = System.currentTimeMillis()): Int = base(card, now) + Habits.boost(card.kind, now)
+
+    private fun base(card: Card, now: Long): Int {
         val ageMin = (now - card.ts) / MIN
         val h = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
         return when (card.kind) {
@@ -117,7 +126,8 @@ object CardStore {
                     when { minsToShow in -30..90 -> 88; minsToShow in 91..360 -> 55; else -> 25 }
                 }
             }
-            "METRO" -> if (h in 7..10 || h in 17..21) 75 else 45
+            "METRO" -> when { Ctx.atMetro() -> 97; h in 7..10 || h in 17..21 -> 70; else -> 42 }
+            "ASK" -> if (ageMin < 60) 80 else 48
             else -> 10
         }
     }

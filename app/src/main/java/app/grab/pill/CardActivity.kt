@@ -52,6 +52,9 @@ class CardActivity : AppCompatActivity() {
             setOnClickListener { CardStore.delete(this@CardActivity, k.id); finish() }
         })
         Store.addSaved(this, if (k.kind == "METRO" || k.kind == "MOVIE") 30 else 15)
+        Habits.used(this, k.kind)
+        // Learn metro stations by themselves: opening a metro ticket here marks this spot as a station
+        if (k.kind == "METRO" && Places.hasPermission(this)) Places.learnHere(applicationContext, Places.METRO)
         setContentView(ScrollView(this).apply { setBackgroundColor(Color.WHITE); addView(col); setOnClickListener { finish() } })
     }
 }
