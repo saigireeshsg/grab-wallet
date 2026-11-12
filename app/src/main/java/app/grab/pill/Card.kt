@@ -98,6 +98,7 @@ object CardStore {
             "MOVIE" -> if (card.whenMs > 0) card.whenMs + 4 * HOUR else now + 3 * 24 * HOUR
             "METRO" -> endOfDay(now)
             "ASK" -> now + 24 * HOUR
+            "TRAVEL", "TICKET" -> if (card.whenMs > 0) card.whenMs + 6 * HOUR else now + 3 * 24 * HOUR
             else -> now + 7 * 24 * HOUR
         }
     }
@@ -128,6 +129,7 @@ object CardStore {
             }
             "METRO" -> when { Ctx.atMetro() -> 97; h in 7..10 || h in 17..21 -> 70; else -> 42 }
             "ASK" -> if (ageMin < 60) 80 else 48
+            "TRAVEL", "TICKET" -> if (card.whenMs == 0L) 40 else ((card.whenMs - now) / MIN).let { when { it in -60..180 -> 86; it in 181..1440 -> 55; else -> 30 } }
             else -> 10
         }
     }

@@ -49,10 +49,17 @@ class PillService : Service() {
     private var shown: Card? = null
     private val hidden = mutableSetOf<String>()
     private var popup: View? = null
+    private val shots by lazy { ScreenshotWatcher(this) }
     private var popupKey: String? = null
     private val closePopup = Runnable { hidePopup() }
     private val ticker = object : Runnable {
-        override fun run() { render(); try { Assistant.tick(this@PillService) } catch (e: Exception) { }; main.postDelayed(this, 60_000) }
+        override fun run() {
+            render()
+            shots.start() // picks up the screenshot permission if it was granted after the pill started
+            try { Assistant.tick(this@PillService) } catch (e: Exception) { }
+            try { Updater.auto(this@PillService) } catch (e: Exception) { } // throttled to a few checks a day
+            main.postDelayed(this, 60_000)
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -67,10 +74,11 @@ class PillService : Service() {
         Assistant.listen(popListener)
         main.post(ticker)
         Places.register(this)
+        shots.start()
     }
 
     override fun onDestroy() {
-        CardBus.unlisten(listener); Assistant.unlisten(popListener); main.removeCallbacks(ticker)
+        CardBus.unlisten(listener); Assistant.unlisten(popListener); main.removeCallbacks(ticker); shots.stop()
         hidePopup()
         try { wm.removeView(root) } catch (_: Exception) {}
         super.onDestroy()
@@ -80,7 +88,7 @@ class PillService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(NotificationChannel("pill", "Grab pill", NotificationManager.IMPORTANCE_MIN))
         val open = PendingIntent.getActivity(this, 0, Intent(this, HubActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-        val n = Notification.Builder(this, "pill").setSmallIcon(android.R.drawable.ic_menu_search)
+        val n = Notification.Builder(this, "pill").setSmallIcon(R.drawable.ic_stat_grab)
             .setContentTitle("Grab is ready").setContentText("Codes, tickets and rides in the pill").setContentIntent(open).build()
         if (Build.VERSION.SDK_INT >= 34) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE) else startForeground(1, n)
     }
@@ -96,14 +104,14 @@ class PillService : Service() {
     private fun buildPill() {
         root = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(10), dp(8), dp(14), dp(8))
-            background = GradientDrawable().apply { cornerRadius = dp(24).toFloat(); setColor(0xE61C1C1E.toInt()) }
-            elevation = dp(10).toFloat()
+            setPadding(dp(8), dp(8), dp(16), dp(8))
+            background = GradientDrawable().apply { cornerRadius = dp(26).toFloat(); setColor(PopupUi.PILL_IDLE); setStroke(dp(1), 0x22FFFFFF) }
+            elevation = dp(12).toFloat()
         }
-        icon = TextView(this).apply { textSize = 16f; gravity = Gravity.CENTER; setPadding(dp(6), 0, dp(8), 0) }
-        title = TextView(this).apply { setTextColor(0xFFFFFFFF.toInt()); textSize = 13f; typeface = Typeface.DEFAULT_BOLD; maxLines = 1; maxWidth = dp(170) }
-        value = TextView(this).apply { setTextColor(0xFFFFFFFF.toInt()); textSize = 17f; typeface = Typeface.MONOSPACE; setPadding(dp(10), 0, 0, 0) }
-        root.addView(icon); root.addView(title); root.addView(value)
+        icon = TextView(this).apply { textSize = 15f; gravity = Gravity.CENTER; setTextColor(0xFFFFFFFF.toInt()); typeface = Typeface.DEFAULT_BOLD; background = D.circle(0x26FFFFFF) }
+        title = TextView(this).apply { setTextColor(0xFFFFFFFF.toInt()); textSize = 13f; typeface = Typeface.create("sans-serif-medium", Typeface.BOLD); maxLines = 1; maxWidth = dp(180); setPadding(dp(10), 0, 0, 0); ellipsize = android.text.TextUtils.TruncateAt.END }
+        value = TextView(this).apply { setTextColor(0xFFFFFFFF.toInt()); textSize = 17f; letterSpacing = 0.15f; typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD); setPadding(dp(10), 0, 0, 0) }
+        root.addView(icon, LinearLayout.LayoutParams(dp(30), dp(30))); root.addView(title); root.addView(value)
 
         lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
@@ -159,7 +167,7 @@ class PillService : Service() {
             icon.text = "G"
             title.text = Ctx.place?.let { "at ${it.name}" } ?: CalendarHelper.next(this)?.let { "next: ${it.title.take(16)} ${it.timeLabel}" } ?: "hold to pay · swipe up"
             value.text = ""
-            bg.setColor(0xE61C1C1E.toInt()); return
+            bg.setColor(PopupUi.PILL_IDLE); return
         }
         icon.text = CardViews.ICON[k.kind] ?: "•"
         title.text = when (k.kind) {
@@ -168,63 +176,19 @@ class PillService : Service() {
             else -> "${k.title} · ${k.sub}"
         }
         value.text = when {
-            k.kind == "OTP" || (k.kind == "RIDE" && k.value.all { it.isDigit() }) -> k.value.chunked(1).joinToString(" ")
+            k.kind == "OTP" || (k.kind == "RIDE" && k.value.all { it.isDigit() }) -> k.value
             k.kind == "MOVIE" -> Parser.timeLabel(k.whenMs).substringAfter(" ")
             k.kind == "ASK" -> ""
             else -> k.value
         }
-        bg.setColor((CardViews.COLOR[k.kind] ?: 0xFF1C1C1E.toInt()) and 0x00FFFFFF or (0xF2 shl 24))
+        bg.setColor(D.alpha(CardViews.darker(D.kind(k.kind)), 0xF2))
     }
 
     // ------------------------------------------------------------------ pop-up
 
     private fun showPopup(m: Moment) {
         hidePopup()
-        val color = CardViews.COLOR[m.kind] ?: 0xFF1C1C1E.toInt()
-        val sheet = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(10), dp(16), dp(14))
-            background = GradientDrawable().apply { cornerRadius = dp(26).toFloat(); setColor(0xFFFFFFFF.toInt()); setStroke(dp(2), color) }
-            elevation = dp(16).toFloat()
-        }
-        // grab handle
-        sheet.addView(View(this).apply { background = GradientDrawable().apply { cornerRadius = dp(3).toFloat(); setColor(0x33000000) } },
-            LinearLayout.LayoutParams(dp(36), dp(5)).apply { gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = dp(8) })
-        val head = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        head.addView(TextView(this).apply {
-            text = CardViews.ICON[m.kind] ?: "•"; textSize = 18f; gravity = Gravity.CENTER
-            background = GradientDrawable().apply { cornerRadius = dp(10).toFloat(); setColor(color) }
-        }, LinearLayout.LayoutParams(dp(36), dp(36)))
-        val words = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(12), 0, 0, 0) }
-        words.addView(TextView(this).apply { text = m.title; textSize = 16f; typeface = Typeface.DEFAULT_BOLD; setTextColor(0xFF000000.toInt()); maxLines = 2 })
-        if (m.sub.isNotBlank()) words.addView(TextView(this).apply { text = m.sub; textSize = 13f; setTextColor(0x99000000.toInt()); maxLines = 2 })
-        head.addView(words, LinearLayout.LayoutParams(0, -2, 1f))
-        sheet.addView(head)
-
-        val qr = if (m.qr.isNotEmpty()) Qr.encode(m.qr, 720) else null
-        when {
-            qr != null -> sheet.addView(ImageView(this).apply { setImageBitmap(qr); adjustViewBounds = true },
-                LinearLayout.LayoutParams(dp(230), dp(230)).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = dp(10) })
-            m.img.isNotEmpty() -> BitmapFactory.decodeFile(m.img)?.let { b ->
-                sheet.addView(ImageView(this).apply { setImageBitmap(b); adjustViewBounds = true }, LinearLayout.LayoutParams(-1, dp(260)).apply { topMargin = dp(10) })
-            }
-        }
-        if (m.big.isNotEmpty()) sheet.addView(TextView(this).apply {
-            text = if (m.big.all { it.isDigit() }) m.big.chunked(1).joinToString(" ") else m.big
-            textSize = 34f; typeface = Typeface.MONOSPACE; gravity = Gravity.CENTER; setTextColor(0xFF000000.toInt()); setPadding(0, dp(8), 0, dp(4))
-        })
-        if (m.acts.isNotEmpty()) {
-            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(10), 0, 0) }
-            m.acts.take(3).forEachIndexed { i, a ->
-                row.addView(Button(this).apply {
-                    text = a.label; isAllCaps = false; textSize = 15f; maxLines = 1
-                    setTextColor(if (a.primary) 0xFFFFFFFF.toInt() else 0xFF000000.toInt())
-                    background = GradientDrawable().apply { cornerRadius = dp(14).toFloat(); setColor(if (a.primary) color else 0xFFF2F2F7.toInt()) }
-                    stateListAnimator = null
-                    setOnClickListener { hidePopup(); try { a.run(this@PillService) } catch (e: Exception) { } }
-                }, LinearLayout.LayoutParams(0, dp(50), 1f).apply { if (i > 0) marginStart = dp(8) })
-            }
-            sheet.addView(row)
-        }
+        val sheet = PopupUi.sheet(this, m) { a -> hidePopup(); try { a.run(this@PillService) } catch (e: Exception) { } }
         // tap the body = open the card in full; swipe down = dismiss
         var y0 = 0f
         sheet.setOnTouchListener { v, e ->

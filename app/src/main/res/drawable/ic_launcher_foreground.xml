@@ -1,0 +1,11 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- pop-up card -->
+    <path android:fillColor="#FFFFFF" android:fillAlpha="0.55"
+        android:pathData="M38,32 H70 A6,6 0 0 1 76,38 V46 A6,6 0 0 1 70,52 H38 A6,6 0 0 1 32,46 V38 A6,6 0 0 1 38,32 Z" />
+    <!-- the pill -->
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M42,58 H66 A9,9 0 0 1 66,76 H42 A9,9 0 0 1 42,58 Z" />
+    <path android:fillColor="#4F46E5"
+        android:pathData="M38,67 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0" />
+</vector>

@@ -8,12 +8,18 @@
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <!-- v0.3 assistant -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- self-updates from GitHub releases (silent on Android 12+ once Grab installed itself) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
     <!-- only used by the optional AI, when you turn it on -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
@@ -48,7 +54,8 @@
 
     <application
         android:label="Grab"
-        android:icon="@android:drawable/ic_menu_search"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:allowBackup="false"
         android:theme="@style/Theme.Grab">
 
@@ -59,7 +66,8 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".SetupActivity" android:exported="false" />
+        <activity android:name=".OnboardingActivity" android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name=".SetupActivity" android:exported="false" android:label="Settings" />
         <activity android:name=".CardActivity" android:exported="false" android:excludeFromRecents="true" />
         <activity android:name=".DocsActivity" android:exported="false" />
 
@@ -133,6 +141,7 @@
         </service>
 
         <receiver android:name=".GeofenceReceiver" android:exported="false" />
+        <receiver android:name=".UpdateReceiver" android:exported="false" />
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

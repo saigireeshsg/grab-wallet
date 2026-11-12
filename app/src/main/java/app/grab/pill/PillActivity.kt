@@ -1,79 +1,83 @@
 package app.grab.pill
 
+import android.content.Context
 import android.content.Intent
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.view.Gravity
-import android.widget.Button
+import android.view.View
+import android.view.ViewGroup
+import android.view.animation.DecelerateInterpolator
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 
 /**
- * Quick panel (swipe the pill up, or tap it when idle). Sits at the bottom, all within thumb reach:
- * top 3 things right now, then a row of one-tap actions ordered by what you usually do at this hour.
+ * Quick panel (swipe the pill up, or tap it when idle): a sheet at the bottom, all within thumb reach.
+ * Top things right now, then one-tap actions ordered by what you usually do at this hour.
  */
 class PillActivity : AppCompatActivity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         Habits.init(this); Ctx.init(this)
-        val dp = { v: Int -> CardViews.dp(this, v) }
-        val outer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.BOTTOM; setBackgroundColor(0x55000000); setOnClickListener { finish() } }
-        val sheet = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; isClickable = true
-            setPadding(dp(14), dp(10), dp(14), dp(20))
-            background = GradientDrawable().apply { cornerRadius = dp(24).toFloat(); setColor(0xFFF2F2F7.toInt()) }
-        }
-        val where = Ctx.place?.let { " · at ${it.name}" } ?: ""
-        sheet.addView(TextView(this).apply { text = "Grab$where · ${Store.savedSeconds(this@PillActivity) / 60} min saved"; textSize = 12f; typeface = Typeface.DEFAULT_BOLD; setTextColor(0x99000000.toInt()) })
-        val cards = CardStore.all(this).sortedByDescending { CardStore.score(it) }.take(3)
-        if (cards.isEmpty()) sheet.addView(TextView(this).apply { text = "Nothing urgent right now."; textSize = 15f; setPadding(0, dp(10), 0, dp(6)) })
-        cards.forEach { k ->
-            sheet.addView(CardViews.gap(this))
-            sheet.addView(CardViews.card(this, k) {
-                if (it.kind == "ASK") Asks.send(this, it) else startActivity(Intent(this, CardActivity::class.java).putExtra("id", it.id))
-                finish()
-            })
-        }
-        CalendarHelper.next(this)?.let { ev ->
-            sheet.addView(CardViews.gap(this))
-            sheet.addView(Button(this).apply {
-                text = "📅  ${ev.title.take(24)} · ${ev.timeLabel}" + if (ev.link != null) " · Join" else ""; isAllCaps = false; textSize = 15f
-                setOnClickListener {
-                    if (ev.link != null) { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ev.link))); Store.addSaved(this@PillActivity, 45); finish() }
-                    else Toast.makeText(this@PillActivity, "No meeting link in this event", Toast.LENGTH_SHORT).show()
-                }
-            })
-        }
-
-        // one-tap actions, the ones you use at this hour first
-        data class Q(val kind: String, val label: String, val color: Int, val go: () -> Unit)
-        val metroTicket = CardStore.all(this).filter { it.kind == "METRO" }.maxByOrNull { it.ts }
-        val qs = listOf(
-            Q("PAY", "₹\nPay", 0xFF1C8C4E.toInt()) { startActivity(Intent(this, ScanPayActivity::class.java)) },
-            Q("METRO", "🚇\nMetro", 0xFF007AFF.toInt()) {
+        val metro = CardStore.all(this).filter { it.kind == "METRO" }.maxByOrNull { it.ts }
+        val quick = listOf(
+            PanelUi.Quick("PAY", "₹", "Pay") { startActivity(Intent(this, ScanPayActivity::class.java)) },
+            PanelUi.Quick("METRO", "🚇", "Metro") {
                 when {
-                    metroTicket != null -> startActivity(Intent(this, CardActivity::class.java).putExtra("id", metroTicket.id))
+                    metro != null -> startActivity(Intent(this, CardActivity::class.java).putExtra("id", metro.id))
                     Store.get(this, "metro_app") != null -> Assistant.launch(this, Store.get(this, "metro_app")!!)
                     else -> startActivity(Intent(this, HubActivity::class.java).putExtra("tab", "wallet"))
                 }
             },
-            Q("ASK", "📄\nDocs", 0xFF30B0C7.toInt()) { startActivity(Intent(this, DocsActivity::class.java)) },
-            Q("HUB", "🗂\nAll", 0xFF1C1C1E.toInt()) { startActivity(Intent(this, HubActivity::class.java)) },
+            PanelUi.Quick("ASK", "📄", "Docs") { startActivity(Intent(this, DocsActivity::class.java)) },
+            PanelUi.Quick("HUB", "🗂", "All") { startActivity(Intent(this, HubActivity::class.java)) },
         ).sortedByDescending { if (it.kind == "HUB") -1 else Habits.boost(it.kind) }
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; setPadding(0, dp(12), 0, 0) }
-        qs.forEach { q ->
-            row.addView(Button(this).apply {
-                text = q.label; isAllCaps = false; textSize = 14f; setTextColor(0xFFFFFFFF.toInt()); stateListAnimator = null
-                background = GradientDrawable().apply { cornerRadius = dp(18).toFloat(); setColor(q.color) }
-                setOnClickListener { q.go(); finish() }
-            }, LinearLayout.LayoutParams(0, dp(72), 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
+        val ev = CalendarHelper.next(this)
+        val v = PanelUi.build(this,
+            cards = CardStore.all(this).sortedByDescending { CardStore.score(it) }.take(3),
+            header = listOfNotNull("Grab", Ctx.place?.name, "${Store.savedSeconds(this) / 60} min saved").joinToString(" · "),
+            meeting = ev?.let { "${it.title.take(26)} · ${it.timeLabel}" }, meetingLink = ev?.link != null,
+            quick = quick,
+            onCard = { k -> if (k.kind == "ASK") Asks.send(this, k) else startActivity(Intent(this, CardActivity::class.java).putExtra("id", k.id)); finish() },
+            onMeeting = { ev?.link?.let { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))); Store.addSaved(this, 45) }; finish() },
+            onQuick = { it.go(); finish() },
+            onClose = { finish() })
+        v.setBackgroundColor(0x66000000)
+        setContentView(v)
+        (v as ViewGroup).getChildAt(0)?.let { s -> s.translationY = D.dpf(this, 300); s.animate().translationY(0f).setDuration(240).setInterpolator(DecelerateInterpolator()).start() }
+    }
+}
+
+object PanelUi {
+    data class Quick(val kind: String, val emoji: String, val label: String, val go: () -> Unit)
+
+    fun build(c: Context, cards: List<Card>, header: String, meeting: String?, meetingLink: Boolean, quick: List<Quick>,
+              onCard: (Card) -> Unit, onMeeting: () -> Unit, onQuick: (Quick) -> Unit, onClose: () -> Unit): View {
+        val p = D.p(c)
+        val outer = LinearLayout(c).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.BOTTOM; setOnClickListener { onClose() } }
+        val sheet = D.col(c, 16, 10).apply {
+            isClickable = true
+            background = D.round(c, p.bg, 28); elevation = D.dpf(c, 20)
         }
-        sheet.addView(row)
-        outer.addView(sheet, LinearLayout.LayoutParams(-1, -2).apply { setMargins(dp(8), 0, dp(8), dp(8)) })
-        setContentView(outer)
+        sheet.addView(View(c).apply { background = D.round(c, p.line, 99) }, LinearLayout.LayoutParams(D.dp(c, 40), D.dp(c, 5)).apply { gravity = Gravity.CENTER_HORIZONTAL; bottomMargin = D.dp(c, 10) })
+        sheet.addView(D.small(c, header, p.ink3).apply { setPadding(D.dp(c, 4), 0, 0, D.dp(c, 4)) })
+        if (cards.isEmpty()) sheet.addView(D.listRow(c, "☀️", p.warn, "Nothing urgent right now", "Codes, riders and tickets show up here"), D.wide(c, top = 6))
+        cards.forEach { sheet.addView(CardViews.card(c, it) { k -> onCard(k) }, D.wide(c, top = 8)) }
+        if (meeting != null) sheet.addView(D.listRow(c, "📅", D.kind("MEET"), meeting, if (meetingLink) "Tap to join" else "No meeting link",
+            if (meetingLink) D.pill(c, "Join", D.kind("MEET"), solid = true) else null) { onMeeting() }, D.wide(c, top = 8))
+        val row = D.row(c).apply { setPadding(0, D.dp(c, 14), 0, D.dp(c, 6)) }
+        quick.forEach { q ->
+            val color = if (q.kind == "HUB") p.ink2 else D.kind(q.kind)
+            row.addView(D.col(c).apply {
+                gravity = Gravity.CENTER; setPadding(0, D.dp(c, 10), 0, D.dp(c, 10))
+                D.tappable(c, this, D.alpha(color, if (p.dark) 0x33 else 0x1A), 20); setOnClickListener { onQuick(q) }
+                addView(TextView(c).apply { text = q.emoji; textSize = 22f; gravity = Gravity.CENTER; setTextColor(color); typeface = android.graphics.Typeface.DEFAULT_BOLD })
+                addView(TextView(c).apply { text = q.label; textSize = 13f; gravity = Gravity.CENTER; setTextColor(p.ink); typeface = android.graphics.Typeface.DEFAULT_BOLD })
+            }, D.weight(c, 1f, 76, 8))
+        }
+        sheet.addView(row, D.wide(c))
+        outer.addView(sheet, LinearLayout.LayoutParams(-1, -2).apply { setMargins(D.dp(c, 8), 0, D.dp(c, 8), D.dp(c, 10)) })
+        return outer
     }
 }

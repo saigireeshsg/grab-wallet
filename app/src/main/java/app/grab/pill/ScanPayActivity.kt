@@ -86,24 +86,39 @@ class ScanPayActivity : AppCompatActivity() {
     override fun onDestroy() { camera?.unbindAll(); worker.shutdown(); super.onDestroy() }
 
     private fun buildUi() {
+        val pal = D.p(this)
+        D.window(this, 0xFF000000.toInt())
         val outer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(0xFF000000.toInt()) }
         preview = PreviewView(this).apply { scaleType = PreviewView.ScaleType.FILL_CENTER }
-        outer.addView(preview, LinearLayout.LayoutParams(-1, 0, 1f))
+        // camera with a viewfinder frame and a hint, so it's obvious where to point
+        val cam = android.widget.FrameLayout(this)
+        cam.addView(preview, android.widget.FrameLayout.LayoutParams(-1, -1))
+        cam.addView(android.view.View(this).apply { background = D.round(this@ScanPayActivity, android.graphics.Color.TRANSPARENT, 28, 0xCCFFFFFF.toInt(), 3) },
+            android.widget.FrameLayout.LayoutParams(dp(230), dp(230), Gravity.CENTER))
+        cam.addView(TextView(this).apply {
+            text = "Point at any UPI QR"; textSize = 14f; setTextColor(0xFFFFFFFF.toInt()); setPadding(dp(14), dp(7), dp(14), dp(8))
+            background = D.round(this@ScanPayActivity, 0x88000000.toInt(), 99)
+        }, android.widget.FrameLayout.LayoutParams(-2, -2, Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM).apply { bottomMargin = dp(28) })
+        cam.addView(TextView(this).apply {
+            text = "✕"; textSize = 18f; setTextColor(0xFFFFFFFF.toInt()); gravity = Gravity.CENTER; background = D.circle(0x66000000); setOnClickListener { finish() }
+        }, android.widget.FrameLayout.LayoutParams(dp(42), dp(42), Gravity.TOP or Gravity.END).apply { topMargin = dp(16); marginEnd = dp(16) })
+        outer.addView(cam, LinearLayout.LayoutParams(-1, 0, 1f))
 
         val sheet = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(16), dp(18), dp(22))
-            background = GradientDrawable().apply { cornerRadii = floatArrayOf(dp(26).toFloat(), dp(26).toFloat(), dp(26).toFloat(), dp(26).toFloat(), 0f, 0f, 0f, 0f); setColor(0xFFFFFDF8.toInt()) }
+            background = GradientDrawable().apply { cornerRadii = floatArrayOf(dp(28).toFloat(), dp(28).toFloat(), dp(28).toFloat(), dp(28).toFloat(), 0f, 0f, 0f, 0f); setColor(pal.surface) }
         }
-        who = TextView(this).apply { text = "Point at a UPI QR"; textSize = 19f; typeface = Typeface.DEFAULT_BOLD; setTextColor(0xFF000000.toInt()) }
-        hint = TextView(this).apply { text = "Amount and pay button stay right here"; textSize = 13f; setTextColor(0x99000000.toInt()) }
+        who = D.h2(this, "Scan to pay")
+        hint = D.small(this, "Amount and pay button stay right here, under your thumb")
         input = EditText(this).apply {
-            inputType = InputType.TYPE_CLASS_NUMBER; textSize = 36f; typeface = Typeface.MONOSPACE; gravity = Gravity.CENTER
-            hint = "₹ 0"; isEnabled = false
+            inputType = InputType.TYPE_CLASS_NUMBER; textSize = 40f; typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD); gravity = Gravity.CENTER
+            hint = "₹ 0"; isEnabled = false; setTextColor(pal.ink); setHintTextColor(pal.ink3)
+            background = D.round(this@ScanPayActivity, pal.surface2, 18); setPadding(0, dp(12), 0, dp(12))
         }
         quick = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         payBtn = Button(this).apply {
-            text = "Pay"; isAllCaps = false; textSize = 17f; isEnabled = false; setTextColor(0xFFFFFFFF.toInt())
-            background = GradientDrawable().apply { cornerRadius = dp(16).toFloat(); setColor(0xFF1C8C4E.toInt()) }
+            text = "Pay"; isAllCaps = false; textSize = 17f; isEnabled = false; setTextColor(0xFFFFFFFF.toInt()); typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            background = GradientDrawable().apply { cornerRadius = dp(18).toFloat(); setColor(D.kind("PAY")) }
             stateListAnimator = null
             setOnClickListener {
                 amt = input.text.toString().toIntOrNull() ?: 0
@@ -112,13 +127,13 @@ class ScanPayActivity : AppCompatActivity() {
             }
         }
         val other = TextView(this).apply {
-            text = "Pay with a different UPI app"; textSize = 13f; gravity = Gravity.CENTER; setTextColor(0xFF007AFF.toInt()); setPadding(0, dp(10), 0, 0)
+            text = "Pay with a different UPI app"; textSize = 14f; gravity = Gravity.CENTER; setTextColor(pal.brand); setPadding(0, dp(12), 0, dp(2))
             setOnClickListener {
                 amt = input.text.toString().toIntOrNull() ?: 0
                 if (pa.isNotEmpty() && amt > 0) pay(forceChooser = true)
             }
         }
-        sheet.addView(who); sheet.addView(hint); sheet.addView(input)
+        sheet.addView(who); sheet.addView(hint); sheet.addView(input, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12); bottomMargin = dp(10) })
         sheet.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(quick) })
         sheet.addView(payBtn, LinearLayout.LayoutParams(-1, dp(56)).apply { topMargin = dp(10) })
         sheet.addView(other)
@@ -184,8 +199,8 @@ class ScanPayActivity : AppCompatActivity() {
         val base = guess ?: 0
         if (!qrHasAmount) listOf(base, base + 10, 20, 50, 100, 200).filter { it > 0 }.distinct().take(6).forEach { a ->
             quick.addView(Button(this).apply {
-                text = "₹$a"; isAllCaps = false; textSize = 15f
-                background = GradientDrawable().apply { cornerRadius = dp(12).toFloat(); setColor(0xFFF2F2F7.toInt()) }
+                text = "₹$a"; isAllCaps = false; textSize = 15f; setTextColor(D.p(this@ScanPayActivity).ink); typeface = Typeface.DEFAULT_BOLD
+                background = GradientDrawable().apply { cornerRadius = dp(99).toFloat(); setColor(D.p(this@ScanPayActivity).surface2) }
                 stateListAnimator = null
                 setOnClickListener { input.setText(a.toString()); input.setSelection(input.text.length) }
             }, LinearLayout.LayoutParams(dp(72), dp(44)).apply { marginEnd = dp(8) })

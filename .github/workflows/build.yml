@@ -1,5 +1,7 @@
 name: Build APK
 on: [push, workflow_dispatch]
+permissions:
+  contents: write   # to publish releases that the in-app updater installs
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,8 +14,29 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Signing key (from repository secrets)
+        env:
+          KS: ${{ secrets.GRAB_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS" ]; then
+            echo "$KS" | base64 -d > "$RUNNER_TEMP/grab.jks"
+            echo "GRAB_KEYSTORE=$RUNNER_TEMP/grab.jks" >> "$GITHUB_ENV"
+            echo "SIGNED=1" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No GRAB_KEYSTORE_B64 secret: this build uses a throwaway key, so it can't be published as an update."
+          fi
       - run: gradle testDebugUnitTest assembleDebug --stacktrace
+        env:
+          GRAB_KEYSTORE_PASS: ${{ secrets.GRAB_KEYSTORE_PASS }}
       - uses: actions/upload-artifact@v4
         with:
           name: grab-pill-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Publish update (main only)
+        if: github.ref == 'refs/heads/main' && env.SIGNED == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          code=$((GITHUB_RUN_NUMBER + 100))
+          cp app/build/outputs/apk/debug/app-debug.apk grab.apk
+          gh release create "build-$code" grab.apk --title "Grab 0.4.$GITHUB_RUN_NUMBER" --notes "$(git log -1 --pretty=%s)" --latest

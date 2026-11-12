@@ -17,7 +17,7 @@ import java.util.Calendar
  * Android asks Grab about every incoming call from a number NOT in your contacts (role: Caller ID & spam).
  *  - numbers you blocked → rejected silently
  *  - likely spam (telemarketing 140-series, spoofed caller ID, unexpected international, hidden) →
- *    ringtone silenced + a pop-up at the bottom: Decline · It's OK · Always block
+ *    ringtone silenced + a pop-up at the bottom: Decline · Block · It's OK
  *  - everything else rings normally
  * Decisions are on the phone, from the number only. Nothing is uploaded.
  */
@@ -40,7 +40,7 @@ class SpamScreener : CallScreeningService() {
                 Assistant.pop(Moment("call:$num:${System.currentTimeMillis() / 60_000}", "CALL", "Likely spam · ${SpamRules.pretty(num)}", v.reason + " · ringtone muted",
                     ttlMs = 30_000, acts = listOf(
                         Act("Decline", true) { SpamRules.endCall(it) },
-                        Act("Always block") { SpamRules.block(it, num); SpamRules.endCall(it) },
+                        Act("Block") { SpamRules.block(it, num); SpamRules.endCall(it) },
                         Act("It's OK") { SpamRules.allow(it, num) }
                     )), force = true)
             }

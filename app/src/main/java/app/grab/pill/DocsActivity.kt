@@ -1,22 +1,25 @@
 package app.grab.pill
 
-import android.graphics.Typeface
+import android.content.Context
 import android.net.Uri
 import android.os.Bundle
+import android.view.Gravity
+import android.view.View
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 /**
  * Your document vault. Opened with extra "ask" = an ASK card id when someone is waiting for a file:
  * pick it once → Grab sends it right away and remembers it for the next request.
  */
-class DocsActivity : AppCompatActivity() {
-    private lateinit var col: LinearLayout
+class DocsActivity : AppCompatActivity(), DocsUi.Actions {
+    private lateinit var host: FrameLayout
     private var askId: String? = null
 
     private val pick = registerForActivityResult(ActivityResultContracts.OpenDocument()) { u: Uri? ->
@@ -28,48 +31,37 @@ class DocsActivity : AppCompatActivity() {
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
+        D.window(this)
         askId = intent.getStringExtra("ask")
-        col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(36), dp(16), dp(32)) }
-        setContentView(ScrollView(this).apply { setBackgroundColor(Ui.BG); addView(col) })
+        host = FrameLayout(this)
+        setContentView(ScrollView(this).apply { setBackgroundColor(D.p(this@DocsActivity).bg); isVerticalScrollBarEnabled = false; addView(host) })
         build()
-        if (askId != null && b == null) launchPick() // someone is waiting: go straight to the picker
+        if (askId != null && b == null) add() // someone is waiting: go straight to the picker
     }
 
-    private fun dp(v: Int) = CardViews.dp(this, v)
-    private fun launchPick() = pick.launch(arrayOf("application/pdf", "image/*", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "*/*"))
-
     private fun build() {
-        col.removeAllViews()
-        col.addView(Ui.h1(this, "Documents"))
-        val ask = askId?.let { CardStore.get(this, it) }
-        col.addView(Ui.p(this, if (ask != null) "${ask.title}. Pick the file once; next time it goes in one tap."
-            else "Kept on this phone. When someone asks for one on WhatsApp or email, it's ready to send."))
+        host.removeAllViews()
+        host.addView(DocsUi.build(this, DocVault.all(this), askId?.let { CardStore.get(this, it) }?.title, this))
+    }
 
-        val docs = DocVault.all(this)
-        if (docs.isEmpty()) col.addView(Ui.p(this, "\nNo documents yet. Add your PAN, Aadhaar, resume, payslips: the things people keep asking for."))
-        docs.forEach { d ->
-            col.addView(CardViews.gap(this))
-            col.addView(Ui.row(this, if (d.mime.startsWith("image")) "🖼" else "📄", d.name,
-                "${DocVault.label(d.type).takeIf { d.type != "OTHER" } ?: "Other"} · tap to send · hold for options", 0xFF34C759.toInt(),
-                onClick = { DocVault.share(this, d); Habits.used(this, "ASK") },
-                onLong = { options(d) }))
-        }
-        col.addView(CardViews.gap(this)); col.addView(CardViews.gap(this))
-        col.addView(Ui.button(this, "+  Add a document", 0xFF000000.toInt()) { launchPick() })
-        col.addView(Ui.p(this, "\nGrab recognises requests for: " + DocVault.TYPES.values.joinToString(", ") { it.first } + "."))
+    override fun back() = finish()
+    override fun add() = pick.launch(arrayOf("application/pdf", "image/*", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "*/*"))
+    override fun send(d: Doc) { DocVault.share(this, d); Habits.used(this, "ASK") }
+    override fun options(d: Doc) {
+        MaterialAlertDialogBuilder(this).setTitle(d.name).setItems(arrayOf("Send", "Change type", "Delete")) { _, i ->
+            when (i) {
+                0 -> send(d)
+                1 -> chooseType { t -> DocVault.retag(this, d.id, t); build() }
+                else -> MaterialAlertDialogBuilder(this).setTitle("Delete ${d.name}?").setPositiveButton("Delete") { _, _ -> DocVault.delete(this, d.id); build() }
+                    .setNegativeButton("Cancel", null).show()
+            }
+        }.show()
     }
 
     private fun chooseType(done: (String) -> Unit) {
         val keys = DocVault.TYPES.keys.toList() + "OTHER"
         val labels = keys.map { if (it == "OTHER") "Something else" else DocVault.label(it) }.toTypedArray()
-        AlertDialog.Builder(this).setTitle("What is this?").setItems(labels) { _, i -> done(keys[i]) }.show()
-    }
-
-    private fun options(d: Doc) {
-        AlertDialog.Builder(this).setTitle(d.name).setItems(arrayOf("Change type", "Delete")) { _, i ->
-            if (i == 0) chooseType { t -> DocVault.retag(this, d.id, t); build() }
-            else { DocVault.delete(this, d.id); build() }
-        }.show()
+        MaterialAlertDialogBuilder(this).setTitle("What is this document?").setItems(labels) { _, i -> done(keys[i]) }.show()
     }
 
     private fun addAndMaybeSend(u: Uri, type: String, ask: Card?) {
@@ -82,26 +74,48 @@ class DocsActivity : AppCompatActivity() {
     }
 }
 
-/** Small shared look for the screens (light, iOS-like, thumb-sized buttons). */
-object Ui {
-    const val BG = 0xFFF2F2F7.toInt()
+object DocsUi {
+    interface Actions { fun back(); fun add(); fun send(d: Doc); fun options(d: Doc) }
 
-    fun h1(c: android.content.Context, t: String) = TextView(c).apply { text = t; textSize = 32f; typeface = Typeface.DEFAULT_BOLD; setTextColor(0xFF000000.toInt()) }
-    fun p(c: android.content.Context, t: String) = TextView(c).apply { text = t; textSize = 14f; setTextColor(0x99000000.toInt()) }
+    private val EMOJI = mapOf("PAN" to "🪪", "AADHAAR" to "🪪", "PASSPORT" to "🛂", "DL" to "🚗", "VOTER" to "🗳", "RESUME" to "📝", "PAYSLIP" to "💰",
+        "BANK" to "🏦", "CHEQUE" to "🧾", "ITR" to "🧾", "OFFER" to "✉️", "RELIEVING" to "✉️", "EDU" to "🎓", "RENT" to "🏠", "PHOTO" to "🖼",
+        "INSURANCE" to "☂️", "VEHICLE" to "🚗")
 
-    fun button(c: android.content.Context, t: String, color: Int, f: () -> Unit) = android.widget.Button(c).apply {
-        text = t; isAllCaps = false; textSize = 16f; setTextColor(0xFFFFFFFF.toInt())
-        background = android.graphics.drawable.GradientDrawable().apply { cornerRadius = CardViews.dp(c, 14).toFloat(); setColor(color) }
-        stateListAnimator = null; setOnClickListener { f() }
-        layoutParams = LinearLayout.LayoutParams(-1, CardViews.dp(c, 52))
-    }
+    fun build(c: Context, docs: List<Doc>, askTitle: String?, a: Actions): View {
+        val p = D.p(c)
+        val col = D.col(c, 20, 8)
+        col.addView(D.space(c, 8))
+        col.addView(TextView(c).apply {
+            text = "‹"; textSize = 30f; setTextColor(p.ink); gravity = Gravity.CENTER
+            D.tappable(c, this, android.graphics.Color.TRANSPARENT, 99); setOnClickListener { a.back() }
+        }, LinearLayout.LayoutParams(D.dp(c, 44), D.dp(c, 44)))
+        col.addView(D.display(c, "Documents"))
+        col.addView(D.body(c, if (askTitle != null) "$askTitle. Pick the file once; next time it goes in one tap."
+            else "Ready to send the moment someone asks on WhatsApp or email. Kept on this phone only.").apply { setPadding(0, D.dp(c, 4), 0, 0) })
+        col.addView(D.space(c, 18))
+        col.addView(D.primary(c, "+  Add a document") { a.add() })
 
-    fun row(c: android.content.Context, icon: String, title: String, sub: String, color: Int, onClick: () -> Unit, onLong: (() -> Unit)? = null) =
-        CardViews.card(c, Card("", "X", title, sub), { onClick() }).apply {
-            ((this as LinearLayout).getChildAt(0) as TextView).apply {
-                text = icon
-                (background as android.graphics.drawable.GradientDrawable).setColor(color)
+        if (docs.isEmpty()) {
+            col.addView(D.space(c, 18))
+            val e = D.card(c, 20).apply { gravity = Gravity.CENTER_HORIZONTAL }
+            e.addView(D.bubble(c, "🗂", D.kind("ASK"), 60, square = false))
+            e.addView(D.space(c, 10))
+            e.addView(D.h2(c, "Start with the usual suspects").apply { gravity = Gravity.CENTER })
+            e.addView(D.body(c, "PAN, Aadhaar, resume and payslips are what people ask for most.").apply { gravity = Gravity.CENTER; setPadding(0, D.dp(c, 4), 0, 0) })
+            col.addView(e, D.wide(c))
+        } else {
+            col.addView(D.label(c, "Your documents · tap to send"))
+            docs.forEach { d ->
+                val row = D.listRow(c, EMOJI[d.type] ?: if (d.mime.startsWith("image")) "🖼" else "📄", D.kind("ASK"), d.name,
+                    (if (d.type == "OTHER") "Other" else DocVault.label(d.type)) + " · " + (if (d.mime.contains("pdf")) "PDF" else if (d.mime.startsWith("image")) "Image" else "File"),
+                    D.pill(c, "Send", D.kind("ASK"))) { a.send(d) }
+                row.setOnLongClickListener { a.options(d); true }
+                col.addView(row, D.wide(c)); col.addView(D.space(c, 10))
             }
-            if (onLong != null) setOnLongClickListener { onLong(); true }
+            col.addView(D.small(c, "Hold a document to rename its type or delete it.", p.ink3).apply { setPadding(D.dp(c, 4), D.dp(c, 2), 0, 0) })
         }
+        col.addView(D.label(c, "Grab spots requests for"))
+        col.addView(D.small(c, DocVault.TYPES.values.joinToString(" · ") { it.first }, p.ink2).apply { setPadding(D.dp(c, 4), 0, D.dp(c, 4), D.dp(c, 30)) })
+        return col
+    }
 }
