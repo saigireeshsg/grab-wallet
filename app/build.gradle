@@ -1,0 +1,33 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+android {
+    namespace 'app.grab.pill'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'app.grab.pill'
+        minSdk 29
+        targetSdk 34
+        versionCode 1
+        versionName '0.2-wallet'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions { jvmTarget = '17' }
+}
+dependencies {
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'com.google.android.material:material:1.12.0'
+    implementation 'androidx.documentfile:documentfile:1.0.1'
+    // QR scanning without camera permission (Google code scanner)
+    implementation 'com.google.android.gms:play-services-code-scanner:16.1.0'
+    // On-device: read QR codes + text (show time, seat, station) from ticket screenshots/PDFs
+    implementation 'com.google.mlkit:barcode-scanning:17.3.0'
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
+    // Re-draw a crisp, scanner-friendly QR from the decoded payload
+    implementation 'com.google.zxing:core:3.5.3'
+}

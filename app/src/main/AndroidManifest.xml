@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+
+    <!-- Lets us see which UPI / ride apps are installed (for hand-off) -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="upi" />
+        </intent>
+        <package android:name="com.rapido.passenger" />
+        <package android:name="com.ubercab" />
+        <package android:name="com.whatsapp" />
+        <package android:name="in.swiggy.android" />
+        <package android:name="com.application.zomato" />
+        <package android:name="com.bt.bms" />
+    </queries>
+
+    <application
+        android:label="Grab"
+        android:icon="@android:drawable/ic_menu_search"
+        android:allowBackup="false"
+        android:theme="@style/Theme.Grab">
+
+        <!-- Hub: tickets, codes, live status in one place -->
+        <activity android:name=".HubActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".SetupActivity" android:exported="false" />
+        <activity android:name=".CardActivity" android:exported="false" android:excludeFromRecents="true" />
+
+        <!-- The panel that opens when you tap an idle pill -->
+        <activity
+            android:name=".PillActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity="app.grab.pill.panel"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.Grab.Translucent" />
+
+        <activity
+            android:name=".ScanPayActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.Grab.Translucent" />
+
+        <!-- Share a metro ticket screenshot, or any text, into Grab -->
+        <activity
+            android:name=".ShareInActivity"
+            android:exported="true"
+            android:label="Save to Grab"
+            android:theme="@style/Theme.Grab.Translucent">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".PillService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Always-on floating assistant pill" />
+        </service>
+
+        <service
+            android:name=".GrabNotificationListener"
+            android:exported="true"
+            android:label="Grab"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="app.grab.pill.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+</manifest>
