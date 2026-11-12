@@ -57,6 +57,42 @@ object Brain {
 
     data class Read(val intent: String, val docType: String?, val summary: String)
 
+    private val EXTRACT = """
+        You turn one phone notification into a card for a phone assistant, or decide it isn't worth one.
+        Reply with ONLY one JSON object, no prose:
+        {"kind": "RIDE" | "ORDER" | "TICKET" | "TRAVEL" | "OTP" | "NONE", "title": <max 5 words>, "detail": <max 10 words>, "value": <the code / seat / PNR the user will need, or "">, "time": <"HH:MM" 24h if an event time is given, else "">}
+        RIDE = a cab/bike/auto driver coming or a trip status. ORDER = a delivery or order status. TICKET = an event/movie/metro booking.
+        TRAVEL = a flight, train or bus booking. OTP = a one-time code. NONE = promotions, news, social, chat, anything else.
+        Digits shown as # were masked for privacy.
+    """.trimIndent()
+
+    /** Ask Claude to turn a notification the rules couldn't read into a card. Never sees OTP digits (masked). */
+    fun extract(c: Context, app: String, title: String, text: String, done: (Card?) -> Unit) {
+        if (!enabled(c)) { done(null); return }
+        val key = key(c) ?: run { done(null); return }
+        val model = model(c)
+        val masked = "$title\n$text".replace(Regex("\\d{4,}")) { "#".repeat(it.value.length) }.take(1200)
+        pool.execute {
+            val card = try {
+                val params = MessageCreateParams.builder().model(model).maxTokens(2048L).system(EXTRACT)
+                    .outputConfig(OutputConfig.builder().effort(OutputConfig.Effort.LOW).build())
+                    .putAdditionalHeader("anthropic-beta", "server-side-fallback-2026-07-01")
+                    .putAdditionalBodyProperty("fallbacks", JsonValue.from("default"))
+                    .addUserMessage("App: $app\nNotification:\n$masked").build()
+                val msg = client(key).messages().create(params)
+                if (msg.stopReason().orElse(null) == StopReason.REFUSAL) null else {
+                    val t = msg.content().mapNotNull { b -> b.text().orElse(null)?.text() }.joinToString("")
+                    val j = JSONObject(t.substring(t.indexOf('{'), t.lastIndexOf('}') + 1))
+                    val kind = j.optString("kind")
+                    if (kind !in setOf("RIDE", "ORDER", "TICKET", "TRAVEL")) null // OTPs are read locally, unmasked
+                    else Card(Card.newId(), kind, j.optString("title").take(40).ifBlank { app }, j.optString("detail").take(60),
+                        value = j.optString("value").takeIf { !it.contains('#') } ?: "", whenMs = Parser.parseWhen(j.optString("time") + " hrs"))
+                }
+            } catch (e: Exception) { null }
+            done(card)
+        }
+    }
+
     /** Ask Claude about one message, off the main thread. `done` gets null when unsure / failed / off. */
     fun classify(c: Context, app: String, sender: String, text: String, done: (Read?) -> Unit) {
         if (!enabled(c)) { done(null); return }

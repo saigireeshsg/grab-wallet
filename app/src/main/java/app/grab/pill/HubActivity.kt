@@ -57,11 +57,35 @@ class HubActivity : AppCompatActivity(), HubUi.Actions {
         setContentView(root)
         CardBus.listen(listener)
         if (Perms.granted(this, Perms.OVERLAY)) startForegroundService(Intent(this, PillService::class.java))
+        if (intent.getBooleanExtra("update", false)) content.post { update() }
     }
 
-    override fun onNewIntent(i: Intent) { super.onNewIntent(i); i.getStringExtra("tab")?.let { tab(it) } }
+    override fun onNewIntent(i: Intent) {
+        super.onNewIntent(i); i.getStringExtra("tab")?.let { tab(it) }
+        if (i.getBooleanExtra("update", false)) update()
+    }
     override fun onDestroy() { CardBus.unlisten(listener); super.onDestroy() }
-    override fun onResume() { super.onResume(); if (::content.isInitialized) build() }
+    private var installAfterPermission = false
+
+    override fun onResume() {
+        super.onResume()
+        if (!::content.isInitialized) return
+        build()
+        if (installAfterPermission && Updater.canInstall(this)) { installAfterPermission = false; update() }
+        Updater.check(this) { if (it != null) build() }
+    }
+
+    /** Install the waiting update: first make sure Grab may install apps, then download with live progress. */
+    override fun update() {
+        val u = Updater.available(this) ?: run { Toast.makeText(this, "You're on the latest version", Toast.LENGTH_SHORT).show(); return }
+        if (!Updater.canInstall(this)) {
+            installAfterPermission = true
+            Toast.makeText(this, "Turn on \"Allow from this source\", then come back", Toast.LENGTH_LONG).show()
+            startActivity(Updater.allowInstallsIntent(this)); return
+        }
+        Updater.install(this, u, onProgress = { build() }, onError = { msg -> Toast.makeText(this, msg, Toast.LENGTH_LONG).show(); build() })
+        build()
+    }
 
     private fun build() {
         content.removeAllViews()
@@ -90,10 +114,18 @@ class HubActivity : AppCompatActivity(), HubUi.Actions {
         if (stations > 0) insights += "📍" to "Knows $stations metro station${if (stations > 1) "s" else ""}"
         val docs = DocVault.all(this).size
         if (docs > 0) insights += "📄" to "$docs document${if (docs > 1) "s" else ""} ready to send"
+        val apps = AppMemory.learnedApps(this)
+        if (apps > 0) insights += "🧠" to "Understands notifications from $apps app${if (apps > 1) "s" else ""}"
         val spam = SpamRules.recent(this).size
         if (spam > 0) insights += "🛡" to "$spam suspicious call${if (spam > 1) "s" else ""} handled"
+        val up = Updater.available(this)
+        val updateLine = when {
+            Updater.progress >= 0 -> "Downloading… ${Updater.progress}%"
+            up != null -> "${up.name} is ready · takes a few seconds"
+            else -> null
+        }
         return HubUi.Now(greeting, SimpleDateFormat("EEEE, d MMMM", Locale.getDefault()).format(Date()), chips, nudge,
-            ranked.firstOrNull(), ranked.drop(1).take(5), insights, Store.savedSeconds(this) / 60)
+            ranked.firstOrNull(), ranked.drop(1).take(5), insights, Store.savedSeconds(this) / 60, updateLine)
     }
 
     private fun walletModel(): HubUi.Wallet {

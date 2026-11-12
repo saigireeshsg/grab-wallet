@@ -92,10 +92,32 @@ Note: the SDK for this adds ~55 MB to the APK.
 4. **🛡 Spam call** → see the Decline / Block / It's OK layout.
 5. Hold the pill → Scan & pay opens with the camera; point at any UPI QR.
 
-## Your tuning job (most important)
-Real notification wording differs from app to app. For a week, collect real examples (Rapido, Swiggy, bank OTPs, WhatsApp requests)
-and add them to `app/src/test/java/app/grab/pill/RulesTest.kt`; adjust the regexes in `Parser.kt` and `Docs.kt` until every one passes.
-`gradle testDebugUnitTest` runs them (CI runs them on every push).
+## How it reads any app (no setup)
+Grab doesn't keep a list of apps to support. Every notification is scored on what it says, and the best match becomes a card:
+ride words + a number plate or ride OTP → **ride**; order / out for delivery / shipped → **delivery**; PNR, flight or train number,
+gate, coach → **flight / train / bus**; show time, audi, metro → **ticket**; a 4–8 digit code → **OTP**. Promotions
+("50% off your next ride") are ignored.
+- **It learns each app.** Once an app has sent two ride (or delivery, or ticket) notifications, even its vaguer ones are read
+  the same way (`AppMemory` in `AutoLearn.kt`). It also learns your metro app by itself.
+- **QR codes inside notifications** (the big picture some apps attach) are read and saved as a crisp ticket.
+- **Ticket screenshots save themselves** (optional step): screenshot a QR in any app and it's added, no sharing needed.
+  Only new screenshots with a QR and ticket-like text are kept.
+- **Optional AI** (off by default): notifications that look like an event but the rules can't read are sent to Claude
+  (numbers masked) to be turned into a card.
+
+To check a real notification, add it to `app/src/test/java/app/grab/pill/AnyAppTest.kt`; CI runs these tests on every push.
+
+## Updates install themselves
+Every push to `main` builds a signed APK and publishes it as a GitHub release (`build-<number>`). Grab checks a few times a
+day; when there's a newer build:
+- first time: a pop-up / Home banner → **Update** → Android asks once to confirm;
+- after that, on Android 12+: Grab installed itself, so new versions install **silently** in the background.
+Settings → *App updates* shows your version and has *Check now*.
+
+One-time setup (repository owner): add two repository secrets so every build is signed with the same key
+(Android only accepts an update signed like the installed app): `GRAB_KEYSTORE_B64` (the keystore, base64) and
+`GRAB_KEYSTORE_PASS`. Without them CI still builds, but doesn't publish updates. Phones that have an APK signed with a
+different key need to uninstall Grab once and install the first signed build; updates are automatic after that.
 
 ## Files
 ```

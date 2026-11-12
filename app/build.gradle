@@ -11,10 +11,30 @@ android {
         applicationId 'app.grab.pill'
         minSdk 29
         targetSdk 34
-        versionCode 4
-        versionName '0.4'
+        // CI numbers every build so the in-app updater can tell which one is newer
+        def run = (System.getenv('GITHUB_RUN_NUMBER') ?: '0').toInteger()
+        versionCode 100 + run
+        versionName "0.4.${run}"
+        buildConfigField 'String', 'UPDATE_REPO', '"saigireeshsg/grab-wallet"'
         // every phone from the last ~8 years is 64-bit ARM; dropping the other CPU types saves ~40 MB
         ndk { abiFilters 'arm64-v8a' }
+    }
+    buildFeatures { buildConfig true }
+    // One stable key for every build, so each new APK installs as an update over the last one.
+    // CI decodes it from the GRAB_KEYSTORE_B64 / GRAB_KEYSTORE_PASS repository secrets.
+    signingConfigs {
+        grab {
+            def ks = System.getenv('GRAB_KEYSTORE')
+            if (ks != null && new File(ks).exists()) {
+                storeFile file(ks)
+                storePassword System.getenv('GRAB_KEYSTORE_PASS')
+                keyAlias 'grab'
+                keyPassword System.getenv('GRAB_KEYSTORE_PASS')
+            }
+        }
+    }
+    buildTypes {
+        debug { if (System.getenv('GRAB_KEYSTORE') != null) signingConfig signingConfigs.grab }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

@@ -44,7 +44,9 @@ class SetupActivity : AppCompatActivity(), SettingsUi.Actions {
             otpAutocopy = Store.get(this, "otp_autocopy") == "1", block140 = Store.get(this, "spam_auto140") == "1",
             metroApp = appName(Store.get(this, "metro_app")), upiApp = appName(Store.get(this, "upi_app")),
             aiOn = Brain.enabled(this), pillOn = Perms.granted(this, Perms.OVERLAY),
-            version = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "" } catch (e: Exception) { "" },
+            version = Updater.currentName(this),
+            updateLine = Updater.lastError(this) ?: Updater.available(this)?.let { "${it.name} is ready · tap to install" }
+                ?: if (Updater.silentPossible(this)) "Up to date · new versions install silently" else "Up to date · checks a few times a day",
         )
         host.removeAllViews(); host.addView(SettingsUi.build(this, m, this))
     }
@@ -136,6 +138,15 @@ class SetupActivity : AppCompatActivity(), SettingsUi.Actions {
         else Toast.makeText(this, "Look at the bottom of the screen ↓", Toast.LENGTH_SHORT).show()
     }
 
+    override fun checkUpdate() {
+        if (Updater.available(this) != null) { startActivity(Intent(this, HubActivity::class.java).putExtra("update", true)); return }
+        Toast.makeText(this, "Checking for updates…", Toast.LENGTH_SHORT).show()
+        Updater.check(this, force = true) { u ->
+            if (u != null) startActivity(Intent(this, HubActivity::class.java).putExtra("update", true))
+            else { Toast.makeText(this, "You're on the latest version", Toast.LENGTH_SHORT).show(); build() }
+        }
+    }
+
     override fun deleteData() {
         MaterialAlertDialogBuilder(this).setTitle("Delete all cards, tickets and documents?").setMessage("This can't be undone.")
             .setPositiveButton("Delete") { _, _ ->
@@ -159,6 +170,7 @@ object SettingsUi {
         val perms: List<PermRow>, val places: List<Place>, val locationOn: Boolean,
         val otpAutocopy: Boolean, val block140: Boolean, val metroApp: String?, val upiApp: String?,
         val aiOn: Boolean, val pillOn: Boolean, val version: String,
+        val updateLine: String = "",
     )
     interface Actions {
         fun back(); fun perm(id: String); fun rerunSetup(); fun pill(on: Boolean)
@@ -166,6 +178,7 @@ object SettingsUi {
         fun learnPlace(type: String); fun place(p: Place)
         fun metroApp(); fun upiApp(); fun ai(); fun demo(what: String)
         fun deleteData(); fun forget()
+        fun checkUpdate() {}
     }
 
     fun build(c: Context, m: Model, a: Actions): View {
@@ -229,6 +242,9 @@ object SettingsUi {
         col.addView(D.listRow(c, "₹", D.kind("PAY"), "UPI app for Scan & pay", m.upiApp ?: "Remembered after your first payment", if (m.upiApp != null) D.chevron(c) else D.pill(c, "Choose", p.brand)) { a.upiApp() }, D.wide(c))
         col.addView(D.space(c, 10))
         col.addView(D.listRow(c, "✨", D.kind("MOVIE"), "Optional AI", if (m.aiOn) "On · Claude reads unclear requests" else "Off · everything stays on the phone", if (m.aiOn) D.pill(c, "On", p.good) else D.chevron(c)) { a.ai() }, D.wide(c))
+
+        col.addView(D.space(c, 10))
+        col.addView(D.listRow(c, "⬆️", D.kind("UPDATE"), "App updates · ${m.version}", m.updateLine, D.pill(c, "Check", p.brand)) { a.checkUpdate() }, D.wide(c))
 
         // --- try it
         col.addView(D.label(c, "Try it"))

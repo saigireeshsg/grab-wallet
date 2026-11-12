@@ -18,6 +18,7 @@ object HubUi {
         val more: List<Card>,
         val insights: List<Pair<String, String>>,
         val savedMin: Int,
+        val update: String? = null,      // "0.4.12 is ready" or "Downloading… 40%"
     )
 
     data class Wallet(val tickets: List<Card>, val asks: List<Card>, val live: List<Card>, val codes: List<Card>, val docs: List<Doc>)
@@ -26,6 +27,7 @@ object HubUi {
         fun card(k: Card); fun action(k: Card); fun settings(); fun setup()
         fun pay(); fun metro(); fun docs(); fun tab(id: String)
         fun addScreenshot(); fun addPdf()
+        fun update() {}
     }
 
     // ------------------------------------------------------------------ header
@@ -70,6 +72,19 @@ object HubUi {
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             n.addView(D.pill(c, "Fix", p.brand, solid = true))
             col.addView(n, D.wide(c))
+        }
+
+        if (m.update != null) {
+            col.addView(D.space(c, 12))
+            val u = D.row(c).apply { setPadding(D.dp(c, 16), D.dp(c, 12), D.dp(c, 12), D.dp(c, 12)) }
+            D.tappable(c, u, p.surface, 20, if (p.dark) null else p.line); u.setOnClickListener { a.update() }
+            u.addView(D.bubble(c, "⬆️", D.kind("UPDATE"), 40))
+            u.addView(D.col(c).apply {
+                setPadding(D.dp(c, 12), 0, D.dp(c, 8), 0)
+                addView(D.title(c, "New version of Grab")); addView(D.small(c, m.update))
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            if (!m.update.startsWith("Downloading")) u.addView(D.pill(c, "Update", D.kind("UPDATE"), solid = true))
+            col.addView(u, D.wide(c))
         }
 
         col.addView(D.space(c, 18))

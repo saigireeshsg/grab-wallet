@@ -17,7 +17,7 @@ object CardViews {
     val COLOR get() = D.KIND
     val ICON = mapOf(
         "OTP" to "🔢", "RIDE" to "🛵", "ORDER" to "🛍", "METRO" to "🚇", "MOVIE" to "🎬", "TICKET" to "🎟",
-        "ASK" to "📄", "CALL" to "🛡", "MEET" to "📅", "PAY" to "₹"
+        "ASK" to "📄", "CALL" to "🛡", "MEET" to "📅", "PAY" to "₹", "UPDATE" to "⬆️", "TRAVEL" to "🧳"
     )
 
     fun dp(c: Context, v: Int) = D.dp(c, v)

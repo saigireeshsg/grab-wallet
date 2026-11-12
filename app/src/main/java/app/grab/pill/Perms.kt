@@ -35,6 +35,7 @@ data class Perm(
 object Perms {
     const val NOTIF = "notif"; const val OVERLAY = "overlay"; const val ESSENTIALS = "essentials"
     const val LOCATION = "location"; const val CALLS = "calls"; const val BATTERY = "battery"
+    const val UPDATES = "updates"; const val PHOTOS = "photos"
 
     val ALL = listOf(
         Perm(NOTIF, "🔔", 0xFF6366F1.toInt(), "OTPs, rides & requests",
@@ -61,6 +62,14 @@ object Perms {
             "Some phones put apps to sleep. One tap keeps the pill and station alerts working all day.",
             listOf("⚡" to "Uses almost no battery when idle", "⏰" to "Pop-ups arrive on time, not late"),
             "Grab doesn't run anything heavy in the background.", "Allow background use", false),
+        Perm(PHOTOS, "🖼", 0xFF8B5CF6.toInt(), "Save ticket screenshots by itself",
+            "Screenshot a ticket QR in any app and Grab saves it on its own: no sharing, no adding.",
+            listOf("📸" to "Only new screenshots are looked at", "🎟" to "Saved only if it has a QR and looks like a ticket", "🚇" to "Metro, movie, train, bus, event tickets"),
+            "Photos are read on the phone. Nothing is uploaded, and other photos are ignored.", "Allow screenshots", false),
+        Perm(UPDATES, "⬆️", 0xFF4F46E5.toInt(), "Updates install themselves",
+            "New versions of Grab arrive automatically from GitHub. No re-downloading APKs.",
+            listOf("🔁" to "Checks a few times a day", "🤫" to "On Android 12+, later updates install silently", "✅" to "Only updates signed with Grab's own key are accepted"),
+            "Grab only ever installs new versions of itself.", "Allow updates", false),
     )
 
     fun get(id: String) = ALL.first { it.id == id }
@@ -79,6 +88,8 @@ object Perms {
         LOCATION -> has(c, Manifest.permission.ACCESS_FINE_LOCATION) && has(c, Manifest.permission.ACCESS_BACKGROUND_LOCATION)
         CALLS -> roleHeld(c) && has(c, Manifest.permission.ANSWER_PHONE_CALLS)
         BATTERY -> c.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(c.packageName)
+        PHOTOS -> has(c, if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE)
+        UPDATES -> Updater.canInstall(c)
         else -> false
     }
 
@@ -175,6 +186,8 @@ class PermRequester(private val a: ComponentActivity, private val onChange: () -
                     forResult.launch(rm.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING))
                 } else ask(Manifest.permission.ANSWER_PHONE_CALLS)
             }
+            Perms.PHOTOS -> ask(if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE)
+            Perms.UPDATES -> launch(Updater.allowInstallsIntent(a), Perms.appInfo(a))
             Perms.BATTERY -> launch(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${a.packageName}")), Perms.appInfo(a))
         }
     }

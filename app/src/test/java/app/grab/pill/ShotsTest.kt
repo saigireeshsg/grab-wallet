@@ -56,18 +56,20 @@ abstract class Screens {
 
     fun all() {
         shot("01_welcome") { OnboardingUi.welcome(c, none) }
-        shot("02_step_notif") { OnboardingUi.step(c, Perms.get(Perms.NOTIF), 1, 6, OnboardingUi.State(false, null, false, null), none, none, none, none, none) }
-        shot("03_step_notif_restricted") { OnboardingUi.step(c, Perms.get(Perms.NOTIF), 1, 6, OnboardingUi.State(false, null, true, null), none, none, none, none, none) }
-        shot("04_step_location_partial") { OnboardingUi.step(c, Perms.get(Perms.LOCATION), 4, 6, OnboardingUi.State(false, "Almost there: choose \"Allow all the time\"", false, null), none, none, none, none, none) }
-        shot("05_step_granted") { OnboardingUi.step(c, Perms.get(Perms.OVERLAY), 2, 6, OnboardingUi.State(true, null, false, null), none, none, none, none, none) }
-        shot("06_step_battery") { OnboardingUi.step(c, Perms.get(Perms.BATTERY), 6, 6, OnboardingUi.State(false, null, false, "Xiaomi"), none, none, none, none, none) }
+        shot("02_step_notif") { OnboardingUi.step(c, Perms.get(Perms.NOTIF), 1, 8, OnboardingUi.State(false, null, false, null), none, none, none, none, none) }
+        shot("03_step_notif_restricted") { OnboardingUi.step(c, Perms.get(Perms.NOTIF), 1, 8, OnboardingUi.State(false, null, true, null), none, none, none, none, none) }
+        shot("04_step_location_partial") { OnboardingUi.step(c, Perms.get(Perms.LOCATION), 4, 8, OnboardingUi.State(false, "Almost there: choose \"Allow all the time\"", false, null), none, none, none, none, none) }
+        shot("05_step_granted") { OnboardingUi.step(c, Perms.get(Perms.OVERLAY), 2, 8, OnboardingUi.State(true, null, false, null), none, none, none, none, none) }
+        shot("06_step_battery") { OnboardingUi.step(c, Perms.get(Perms.BATTERY), 6, 8, OnboardingUi.State(false, null, false, "Xiaomi"), none, none, none, none, none) }
         shot("07_done") { OnboardingUi.done(c, Perms.ALL.mapIndexed { i, p -> p to (i != 3) }, {}, none, none) }
         shot("10_hub_now") { hub(HubUi.now(c, nowModel(ride, listOf(ask, metro, otp)), NoHub), "now") }
+        shot("13_hub_update") { hub(HubUi.now(c, nowModel(otp, listOf(metro)).copy(update = "Grab 0.4.12 is ready · takes a few seconds"), NoHub), "now") }
+        shot("08_step_photos") { OnboardingUi.step(c, Perms.get(Perms.PHOTOS), 7, 8, OnboardingUi.State(false, null, false, null), none, none, none, none, none) }
         shot("11_hub_now_empty") { hub(HubUi.now(c, nowModel(null, emptyList(), "Grab can't see OTPs and rides yet"), NoHub), "now") }
         shot("12_hub_wallet") { hub(HubUi.wallet(c, HubUi.Wallet(listOf(metro, movie), listOf(ask), listOf(order), listOf(otp),
             listOf(Doc("d1", "PAN card", "PAN", "", "application/pdf", 0), Doc("d2", "Resume", "RESUME", "", "application/pdf", 0))), NoHub), "wallet") }
         shot("20_settings") { page(SettingsUi.build(c, SettingsUi.Model(Perms.ALL.mapIndexed { i, p -> SettingsUi.PermRow(p, i < 3, if (i == 3) "Almost there: choose \"Allow all the time\"" else null) },
-            listOf(Place("p1", "Ameerpet", Places.METRO, 0.0, 0.0), Place("p2", "Home", Places.HOME, 0.0, 0.0)), true, true, false, null, "PhonePe", false, true, "0.4"), NoSettings)) }
+            listOf(Place("p1", "Ameerpet", Places.METRO, 0.0, 0.0), Place("p2", "Home", Places.HOME, 0.0, 0.0)), true, true, false, null, "PhonePe", false, true, "0.4.12", "Up to date · new versions install silently"), NoSettings)) }
         shot("30_docs") { page(DocsUi.build(c, listOf(Doc("d1", "PAN card", "PAN", "", "application/pdf", 0), Doc("d2", "Aadhaar", "AADHAAR", "", "image/jpeg", 0), Doc("d3", "Resume", "RESUME", "", "application/pdf", 0)), null, NoDocs)) }
         shot("31_docs_empty") { page(DocsUi.build(c, emptyList(), "Riya wants your PAN card", NoDocs)) }
         shot("40_card_otp") { CardUi.build(c, otp, none, none, none, none) }

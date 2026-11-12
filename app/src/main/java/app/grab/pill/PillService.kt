@@ -49,10 +49,17 @@ class PillService : Service() {
     private var shown: Card? = null
     private val hidden = mutableSetOf<String>()
     private var popup: View? = null
+    private val shots by lazy { ScreenshotWatcher(this) }
     private var popupKey: String? = null
     private val closePopup = Runnable { hidePopup() }
     private val ticker = object : Runnable {
-        override fun run() { render(); try { Assistant.tick(this@PillService) } catch (e: Exception) { }; main.postDelayed(this, 60_000) }
+        override fun run() {
+            render()
+            shots.start() // picks up the screenshot permission if it was granted after the pill started
+            try { Assistant.tick(this@PillService) } catch (e: Exception) { }
+            try { Updater.auto(this@PillService) } catch (e: Exception) { } // throttled to a few checks a day
+            main.postDelayed(this, 60_000)
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -67,10 +74,11 @@ class PillService : Service() {
         Assistant.listen(popListener)
         main.post(ticker)
         Places.register(this)
+        shots.start()
     }
 
     override fun onDestroy() {
-        CardBus.unlisten(listener); Assistant.unlisten(popListener); main.removeCallbacks(ticker)
+        CardBus.unlisten(listener); Assistant.unlisten(popListener); main.removeCallbacks(ticker); shots.stop()
         hidePopup()
         try { wm.removeView(root) } catch (_: Exception) {}
         super.onDestroy()

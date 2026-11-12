@@ -50,7 +50,8 @@ object D {
     val KIND = mapOf(
         "OTP" to 0xFF6366F1.toInt(), "RIDE" to 0xFFF59E0B.toInt(), "ORDER" to 0xFFEF4444.toInt(),
         "METRO" to 0xFF0EA5E9.toInt(), "MOVIE" to 0xFFA855F7.toInt(), "TICKET" to 0xFF22C55E.toInt(),
-        "ASK" to 0xFF14B8A6.toInt(), "CALL" to 0xFFE11D48.toInt(), "MEET" to 0xFF3B82F6.toInt(), "PAY" to 0xFF16A34A.toInt()
+        "ASK" to 0xFF14B8A6.toInt(), "CALL" to 0xFFE11D48.toInt(), "MEET" to 0xFF3B82F6.toInt(), "PAY" to 0xFF16A34A.toInt(),
+        "UPDATE" to 0xFF4F46E5.toInt(), "TRAVEL" to 0xFF0891B2.toInt()
     )
     fun kind(k: String) = KIND[k] ?: 0xFF64748B.toInt()
 
