@@ -1,4 +1,4 @@
-# Grab v0.3 (Android): a context assistant in your thumb zone
+# Grab v0.4 (Android): a context assistant in your thumb zone
 
 Grab watches what is happening on your phone (notifications, where you are, the time, incoming calls)
 and puts the one thing you need **at the bottom of the screen**, so you stop jumping between apps and
@@ -14,6 +14,30 @@ reaching for the top of the screen.
 | Meeting in 2 min | open calendar → find event → find link | pop-up: **Join** |
 
 Everything is processed **on the phone**. The only exception is the optional AI (off by default, see below).
+
+## Screens
+
+<img src="app/src/test/snapshots/images/app.grab.pill_ShotsTest_light_01_welcome.png" width="200"> <img src="app/src/test/snapshots/images/app.grab.pill_ShotsTest_light_02_step_notif.png" width="200"> <img src="app/src/test/snapshots/images/app.grab.pill_ShotsTest_light_10_hub_now.png" width="200"> <img src="app/src/test/snapshots/images/app.grab.pill_ShotsTest_light_12_hub_wallet.png" width="200">
+
+<img src="app/src/test/snapshots/images/app.grab.pill_ShotsTest_light_60_popup_ride.png" width="200"> <img src="app/src/test/snapshots/images/app.grab.pill_ShotsTest_light_61_popup_metro.png" width="200"> <img src="app/src/test/snapshots/images/app.grab.pill_ShotsTest_light_20_settings.png" width="200"> <img src="app/src/test/snapshots/images/app.grab.pill_ShotsTest_light_30_docs.png" width="200">
+
+Dark mode: <img src="app/src/test/snapshots/images/app.grab.pill_ShotsDarkTest_dark_10_hub_now.png" width="200"> <img src="app/src/test/snapshots/images/app.grab.pill_ShotsDarkTest_dark_07_done.png" width="200">
+
+These are rendered from the real UI code on the build machine with [Paparazzi](https://github.com/cashapp/paparazzi)
+(`ANDROID_HOME=… gradle recordPaparazziDebug`); every screen exists in light and dark under `app/src/test/snapshots/images/`.
+
+## First run: guided setup
+Grab opens with a short guided setup: one screen per permission, each saying **what it unlocks, why, and what Grab never does with it**.
+- The button goes **straight to Grab's own switch** (notification access, display over apps), not a long list of apps.
+- The screen **moves on by itself** as soon as the permission is granted, with a ✓.
+- Camera + calendar + notifications are asked **together in one step**; spam screening asks for the call-screening role and the
+  "decline calls" permission **back to back**; battery uses Android's **one-tap** "allow background use" dialog
+  (plus an *Autostart* shortcut on Xiaomi / Oppo / Realme / OnePlus / Vivo / Huawei).
+- Location asks twice in one step (while using → **all the time**), and the button text changes to tell you which to pick.
+- **Android 13+ "Restricted setting"** (apps installed outside the Play Store): if notification access is blocked, the screen
+  shows the 3-step fix with an *Open app info* button.
+- Only notification access and display-over-apps are needed; everything else can be skipped and turned on later in
+  **Settings → Features**, which uses the same flow and shows On / Almost / Turn on for each.
 
 ## The pieces
 
@@ -56,19 +80,16 @@ Claude answers whether it's a document request or needs a reply. OTPs, rides, ti
 The key is stored encrypted on the phone. The default model is `claude-opus-5-5` and can be changed in the same dialog.
 Note: the SDK for this adds ~55 MB to the APK.
 
-## Setup (once)
+## Install
 1. Build: push to GitHub → Actions → "Build APK" → download `grab-pill-apk` (or open in Android Studio → ▶ Run).
-2. **Android 13+:** Settings → Apps → Grab → ⋮ → *Allow restricted settings* (needed before notification access).
-3. Open Grab → **Finish setup** → steps 1–7 → **Start the pill**.
-   - Step 4 (location): choose **Allow all the time**, or the station pop-up only works with Grab open.
-   - Step 5 (spam): pick Grab as *Caller ID & spam app*.
-4. Optional: Setup → pick your **metro app** (opened at the station when no ticket is saved).
+2. Install the APK and open Grab: the guided setup walks you through everything (about 2 minutes).
+3. Optional: Settings → pick your **metro app** (opened at the station when no ticket is saved).
 
-## Test in 5 minutes (Setup → Test)
-1. **Fake Rapido arriving** → pop-up at the bottom with the OTP and Copy.
-2. **Fake "send me your PAN"** → pop-up: *Find it* (first time) → pick a file → share sheet opens. Do it again: now it says *Send PAN card*.
-3. **Fake "arrived at metro"** → metro QR pops up at full brightness.
-4. **Fake spam call pop-up** → see the Decline / Always block / It's OK layout.
+## Test in 5 minutes (Settings → Try it)
+1. **🛵 Rider** → pop-up at the bottom with the OTP and Copy.
+2. **📄 PAN request** → pop-up: *Find it* (first time) → pick a file → share sheet opens. Do it again: now it says *Send PAN card*.
+3. **🚇 At metro** → metro QR pops up at full brightness.
+4. **🛡 Spam call** → see the Decline / Block / It's OK layout.
 5. Hold the pill → Scan & pay opens with the camera; point at any UPI QR.
 
 ## Your tuning job (most important)
@@ -89,8 +110,12 @@ SpamScreener.kt  call screening + SpamRules
 ScanPayActivity.kt  live camera + amount on one screen → your UPI app
 Brain.kt         optional Claude classifier for unclear messages (off by default)
 Parser.kt, Importer.kt, GrabNotificationListener.kt   notifications / screenshots / PDFs → cards
-HubActivity.kt   Now · Wallet tabs + thumb bar      PillActivity.kt  quick panel
-CardActivity.kt  show a card at full brightness     SetupActivity.kt permissions, places, assistant settings, tests
+Design.kt        design system: light/dark palette, type, buttons, rows, chips, switches
+Perms.kt         every permission: status, wording, shortest grant path (PermRequester)
+Onboarding.kt    guided first-run setup
+HubActivity.kt + HubUi.kt   Now · Wallet tabs + thumb bar     PillActivity.kt  quick panel (PanelUi)
+CardActivity.kt  show a card at full brightness (CardUi)     SetupActivity.kt Settings (SettingsUi)
+PopupUi.kt       look of the pop-up and the pill             test/ShotsTest.kt renders every screen to PNG
 ```
 
 ## Next (v0.4)
